@@ -1,0 +1,157 @@
+<!-- You must include the crowd-html-elements script -->
+<script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+
+<crowd-form id="my-crowd-form">
+    <crowd-instructions link-text="View instructions" link-type="button">
+        <short-summary>
+            <p>Review and refine AI-extracted event details</p>
+        </short-summary>
+
+        <detailed-instructions>
+            <h3>Evaluate & Refine an AI-Generated Response</h3>
+            <p>In this task, you will offer a natural language paragraph containing a event with detailed information, then you should review and adjust the AI-extracted event details. The AI has identified key event information such as title, date, time, location, reminder time, importance level, and a summary. Your job is to ensure accuracy and formatting.</p>
+            <ul>
+                <li>Ensure the extracted details are grammatically correct and properly formatted.</li>
+                <li>Only make changes if necessary—do not alter correct information.</li>
+                <li>If a detail is missing, try to infer it from the text. If unclear, leave it blank.</li>
+            </ul>
+        </detailed-instructions>
+        <positive-example>
+            <h3>Event sentence</h3>
+            <p>Apple will host its annual product launch event in San Francisco on March 15, 2025. CEO Tim Cook will introduce new devices.</p>
+
+            <h3>Email paragraph</h3>
+        <p>Dear CSE Students,
+
+Join us on Wednesday, March 12 at 6pm for a panel of experts from academia and industry who will answer your questions about careers and research in the field of artificial intelligence (AI). This event is open to all undergraduate and graduate students.
+
+Date: Wednesday, March 12, 2025
+Time: 6–7 pm EST
+Location: Virtual. Please register on Zoom in advance.
+
+With panelists: Mercy Asiedu (Research Scientist at Google Research), Kai Wang (Assistant Professor at Georgia Tech), and Sindhu Kutty (Lecturer of CSE at U-M)
+
+The panel will be moderated by Alexis Stokes (Stokes Strategy & Consulting) and Elizabeth Bondi-Kelly (Assistant Professor of CSE at U-M).
+
+Please submit your questions on careers and research in AI in advance. The speakers will address as many as possible during the panel. These questions will also be used as part of a study to understand perspectives and common questions about AI careers, as well as to develop tools and programming that support AI career development.
+
+More details available at the event page. For any questions, please contact Sharon Jessica at sharjess@umich.edu.
+
+_______________________________________________
+Cse-ms-students mailing list
+Cse-ms-students@list.eecs.umich.edu
+http://list.eecs.umich.edu/mailman/listinfo/cse-ms-students</p>
+        </positive-example>
+    </crowd-instructions>
+
+
+  <p>Copy or type a paragraph with event description, then click "AI Generate" to let AI extract event details. Then, review and make necessary corrections. Refer to good examples.</p>
+    <crowd-input name="text" id="my-crowd-input"></crowd-input>
+    <button type="button" id="AI-button">AI-generate</button>
+    <p><strong>Revised Reponse:</strong> <span id="ai-revised-intent"></span></p>
+    
+  <!-- This button does NOT submit the form; it only triggers a custom function. -->
+    <label for="eventTitle">Event Title:</label>
+    <crowd-input type="text" id="eventTitle" name="eventTitle" required></crowd-input>
+
+    <label for="startTime">Start Time:</label>
+    <crowd-input type="datetime-local" id="startTime" name="startTime" required></crowd-input>
+
+    <label for="endTime">End Time:</label>
+    <crowd-input type="datetime-local" id="endTime" name="endTime" required></crowd-input>
+
+    <label for="location">Location:</label>
+    <crowd-input type="text" id="location" name="location"></crowd-input>
+
+    <label for="reminder">Reminder Time:</label>
+    <crowd-input type="datetime-local" id="reminder" name="reminder"></crowd-input>
+
+    <label for="importance">Importance:</label>
+    <select id="importance" name="importance" required>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+    </select>
+    <p></p>
+    <label for="summary">Event Summary:</label>
+    <crowd-input type="text" id="summary" name="summary"></crowd-input>
+</crowd-form>
+
+<script>
+const OPENAI_API_KEY = "";
+  document.addEventListener("DOMContentLoaded", () => {
+    const crowdForm = document.getElementById("my-crowd-form");
+    const crowdInput = document.getElementById("my-crowd-input");
+    const respondButton = document.getElementById("AI-button");
+    const revisedIntentEl = document.getElementById("ai-revised-intent");
+    const eventTitle =  document.getElementById('eventTitle');
+    const startTime =  document.getElementById('startTime');
+    const endTime =   document.getElementById('endTime');
+    const location =  document.getElementById('location');
+    const reminder =  document.getElementById('reminder');
+    const importance = document.getElementById('importance');
+    const summary =  document.getElementById('summary');
+    
+    respondButton.addEventListener("click",async () => {
+      const userText = crowdInput.value;
+      if (!userText) {
+        alert("Please enter your response before clicking Respond!");
+        return;
+      }
+      const content = 
+          '    Extract structured event details from the following text and return JSON:' + '"\n' +
+          'Text: "' + userText + '"\n' +
+          'Provide only a JSON output with the following fields without give any other characters:' + '"\n' +
+          '{ "event_title": "Short title of the event", \n"start_time": "ISO 8601 format start time", \n"end_time": "ISO 8601 format end time",\n "location": "Event location", \n"reminder": "Recommended reminder time in ISO 8601",\n "importance": "low/medium/high",\n "summary": "Summary of the event"}}';
+      const messages = [
+        {
+          role: "system",
+          content: "You are an AI that extracts structured event details, provide only a JSON output without give any other characters."
+        },
+        {
+          role: "user",
+          content: content
+        }
+      ];
+      try {
+        // Call the OpenAI ChatCompletion endpoint
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": "Bearer " + OPENAI_API_KEY
+          },
+          body: JSON.stringify({
+            model: "gpt-3.5-turbo",
+            messages: messages,
+            max_tokens: 200,
+            temperature: 0.7
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`OpenAI API error: ${response.status} – ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        let revisedText = data.choices?.[0]?.message?.content?.trim() || "";
+
+        revisedIntentEl.textContent = revisedText.trim();
+        try {
+            const eventDetails = JSON.parse(revisedText);
+            eventTitle.setAttribute("value", eventDetails?.event_title?.trim() || "");
+            startTime.setAttribute("value", eventDetails?.start_time || "");
+            endTime.setAttribute("value", eventDetails?.end_time || "");
+            location.setAttribute("value", eventDetails?.location?.trim() || "");
+            reminder.setAttribute("value", eventDetails?.reminder || "");
+            summary.setAttribute("value", eventDetails?.summary?.trim() || "");
+        } catch (error) {
+            console.error("Error parsing JSON:", error);
+        }
+      } catch (error) {
+        console.error("Error calling OpenAI API:", error);
+        alert("Error calling OpenAI API. Check console for details.");
+      }
+    });
+  });
+</script>
